@@ -17,7 +17,8 @@
     "dragoneye-node": "^1.0.2",
     "express": "^4.21.1",
     "node-fetch": "^3.3.2",
-    "nodemon": "^3.1.7"
+    "nodemon": "^3.1.7",
+    "openai": "^4.75.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
