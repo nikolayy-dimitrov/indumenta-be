@@ -13,6 +13,8 @@ dotenv.config();
 const app: Application = express();
 const port = process.env.PORT || 3001;
 
+const frontendUrl = process.env.FRONTEND_URL;
+
 const token = process.env.DRAGONEYE_API_KEY;
 
 const openai = new OpenAI({
@@ -20,7 +22,7 @@ const openai = new OpenAI({
 });
 
 app.use(cors({
-    origin: 'http://localhost:5173',
+    origin: frontendUrl,
     credentials: true,
 }));
 
