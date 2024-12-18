@@ -31,46 +31,65 @@ app.use(express.urlencoded({ extended: false }));
 
 // API route to handle the Dragoneye request
 app.post('/api/predict', async (req: Request, res: Response) => {
-    const { fileUrl, modelName } = req.body;
+    const { fileUrl, modelName, altModelName } = req.body;
+
+    if (!fileUrl || !modelName || !altModelName) {
+        return res.status(400).json({
+            error: 'Missing required fields',
+            details: {
+                fileUrl: !fileUrl,
+                modelName: !modelName,
+                altModelName: !altModelName,
+            },
+        });
+    }
+
     const dragoneyeClient = new Dragoneye({
         apiKey: token,
     });
 
     try {
         // Call the Dragoneye API and type the response
-        const response: ClassificationPredictImageResponse = await dragoneyeClient.classification.predict({
+        let response: ClassificationPredictImageResponse = await dragoneyeClient.classification.predict({
             image: {
                 url: fileUrl,
             },
             modelName,
         });
 
+        // If no predictions, try fallback model
         if (!response.predictions || response.predictions.length === 0) {
-            // If no predictions, set default values
-            return res.json([{
-                category: "Shoes",
-                vibe: null,
-                season: "Seasonless",
-                color: null
-            }]);
+            console.log(`No predictions from primary model ${modelName}, trying fallback model ${altModelName}`);
+
+            response = await dragoneyeClient.classification.predict({
+                image: { url: fileUrl },
+                modelName: altModelName,
+            });
         }
+
 
         const predictions = response.predictions.map(prediction => {
             // Category display name
             const categoryName = prediction.category?.displayName || null;
 
-            // Find the "vibe" trait
+            // Find the vibe trait
             const vibeTrait = prediction.traits.find(trait => trait.name === 'vibe');
             const vibeName = vibeTrait?.taxons[0]?.displayName || null;
 
+            // Find season trait
             const seasonTrait = prediction.traits.find(trait => trait.name === 'season');
             const seasonName = seasonTrait?.taxons[0].displayName || null
 
+            // Find color name
             const colorTrait = prediction.traits.find(trait => trait.name === 'color_main');
             const mainColorName = colorTrait?.taxons[0].name || null;
 
+            // Find subcategory
+            const subCategoryTrait = prediction.traits.find(trait => trait.name === 'category');
+            const subCategoryName = subCategoryTrait?.taxons[0].displayName || null;
+
             console.log(prediction);
-            return { category: categoryName, vibe: vibeName, season: seasonName, color: mainColorName };
+            return { category: categoryName, subCategory: subCategoryName, vibe: vibeName, season: seasonName, color: mainColorName };
         });
 
         res.json(predictions);
@@ -94,14 +113,15 @@ app.post('/api/generate-outfit', async (req: Request, res: Response) => {
         Each item in the wardrobe is represented as follows:
 
         - Category: The type of item ("Top" - Shirt, Jacket, T-shirt, etc.; "Bottom" - Pants, Skirt, etc.; "Shoes").
-        - Vibe: The item's style or mood (e.g., "Casual", "Formal").
+        - Subcategory: Additional information about the item (e.g. "Low-Top Sneakers", "Sneakers")
+        - Vibe: The item's style or mood (e.g. "Casual", "Formal").
         - Season: The item's suitability for a season ("Winter", "Summer", etc.).
         - Color: The dominant color of the item.
         - ImageURL: A URL pointing to the item's image.
 
         ### Wardrobe Items:
         ${wardrobe.map((item: any) =>
-        `- Item ${item.id}: { Category: ${item.category}, ${item.vibe ? `Vibe: ${item.vibe},` : ''} Season: ${item.season}, Color: ${item.dominantColor}, ImageURL: ${item.imageUrl} }`
+        `- Item ${item.id}: { Category: ${item.category}, ${item.subCategory ? `Subcategory: ${item.subCategory},` : ''} ${item.vibe ? `Vibe: ${item.vibe},` : ''} Season: ${item.season}, Color: ${item.dominantColor}, ImageURL: ${item.imageUrl} }`
     ).join("\n")}
 
         ### Task:
