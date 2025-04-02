@@ -1,102 +1,29 @@
 import dotenv from 'dotenv';
-
 import express, { Application, json, Request, Response } from 'express';
 import cors from 'cors';
-
 import OpenAI from "openai";
-
-import { Dragoneye } from "dragoneye-node";
-import { ClassificationPredictImageResponse } from "dragoneye-node/dist/classification";
+import imageAnalysisRoutes from './src/routes/imageAnalysis.ts';
 
 dotenv.config();
 
 const app: Application = express();
 const port = process.env.PORT || 3001;
-
 const frontendUrl = process.env.FRONTEND_URL;
-
-const token = process.env.DRAGONEYE_API_KEY;
+const appUrl = process.env.APP_URL;
 
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 });
 
 app.use(cors({
-    origin: frontendUrl,
+    origin: frontendUrl || appUrl,
     credentials: true,
 }));
 
 app.use(json());
 app.use(express.urlencoded({ extended: false }));
 
-// API route to handle the Dragoneye request
-app.post('/api/predict', async (req: Request, res: Response) => {
-    const { fileUrl, modelName, altModelName } = req.body;
-
-    if (!fileUrl || !modelName || !altModelName) {
-        return res.status(400).json({
-            error: 'Missing required fields',
-            details: {
-                fileUrl: !fileUrl,
-                modelName: !modelName,
-                altModelName: !altModelName,
-            },
-        });
-    }
-
-    const dragoneyeClient = new Dragoneye({
-        apiKey: token,
-    });
-
-    try {
-        // Call the Dragoneye API and type the response
-        let response: ClassificationPredictImageResponse = await dragoneyeClient.classification.predict({
-            image: {
-                url: fileUrl,
-            },
-            modelName,
-        });
-
-        // If no predictions, try fallback model
-        if (!response.predictions || response.predictions.length === 0) {
-            console.log(`No predictions from primary model ${modelName}, trying fallback model ${altModelName}`);
-
-            response = await dragoneyeClient.classification.predict({
-                image: { url: fileUrl },
-                modelName: altModelName,
-            });
-        }
-
-
-        const predictions = response.predictions.map(prediction => {
-            // Category display name
-            const categoryName = prediction.category?.displayName || null;
-
-            // Find the vibe trait
-            const vibeTrait = prediction.traits.find(trait => trait.name === 'vibe');
-            const vibeName = vibeTrait?.taxons[0]?.displayName || null;
-
-            // Find season trait
-            const seasonTrait = prediction.traits.find(trait => trait.name === 'season');
-            const seasonName = seasonTrait?.taxons[0].displayName || null
-
-            // Find color name
-            const colorTrait = prediction.traits.find(trait => trait.name === 'color_main');
-            const mainColorName = colorTrait?.taxons[0].name || null;
-
-            // Find subcategory
-            const subCategoryTrait = prediction.traits.find(trait => trait.name === 'category');
-            const subCategoryName = subCategoryTrait?.taxons[0].displayName || null;
-
-            console.log(prediction);
-            return { category: categoryName, subCategory: subCategoryName, vibe: vibeName, season: seasonName, color: mainColorName };
-        });
-
-        res.json(predictions);
-    } catch (err) {
-        res.status(500);
-    }
-});
+app.use('/api/images', imageAnalysisRoutes);
 
 // API Route to handle the OpenAI request
 app.post('/api/generate-outfit', async (req: Request, res: Response) => {
@@ -198,6 +125,16 @@ app.post('/api/generate-outfit', async (req: Request, res: Response) => {
     }
 });
 
+app.post('/api/rekognition-analyze', async (req: Request, res: Response) => {
+    try {
+        // Redirect to the imageAnalysis route handler
+        res.redirect(307, '/api/images/analyze');
+    } catch (error) {
+        console.error('Error in rekognition redirect:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 app.listen(port, () => {
     console.log(`Listening on port: ${port}`);
-})
+});
