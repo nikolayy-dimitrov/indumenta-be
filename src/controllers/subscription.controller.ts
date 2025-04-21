@@ -15,30 +15,51 @@ export const pricesConfig = async (req: Request, res: Response) => {
     });
 }
 
-// Create customer
 export const createCustomer = async (req: Request, res: Response) => {
-    const { userId, email } = req.body;
+    const { userId, email } = req.body as { userId: string; email: string };
+    console.log('💡 createCustomer called with:', { userId, email });
 
-    // Check if this user already has a Stripe customer using their email.
-    const existing = await stripe.customers.list({
-        email: email,
-        limit: 1,
-    });
-    const customer = existing.data.length
-        ? existing.data[0]
-        : await stripe.customers.create({
-            email: email,
-            metadata: { userId },
+    if (!userId || !email) {
+        console.warn('⚠️ Missing userId or email');
+        return res.status(400).json({ error: 'Missing userId or email' });
+    }
+
+    const userRef = db.collection('users').doc(userId);
+
+    try {
+        // 1) Read existing Firestore document
+        const userSnap = await userRef.get();
+        const existingId = userSnap.data()?.stripeCustomerId as string | undefined;
+        if (existingId) {
+            console.log(`🔄 Existing stripeCustomerId found for ${userId}:`, existingId);
+            return res.json({ customerId: existingId });
+        }
+
+        // 2) Create new Stripe customer
+        console.log(`➕ Creating new Stripe customer for ${email}`);
+        const customer = await stripe.customers.create({
+            email,
+            metadata: { firebaseUID: userId },
         });
+        console.log(`🆔 Created Stripe customer ID:`, customer.id);
 
-    // 2) Persist the Stripe customer ID in Firestore
-    await db
-        .collection('users')
-        .doc(userId)
-        .set({ stripeCustomerId: customer.id }, { merge: true });
+        // 3) Persist to Firestore
+        try {
+            await userRef.set({ stripeCustomerId: customer.id }, { merge: true });
+            console.log(`✅ Stored stripeCustomerId in users/${userId}`);
+        } catch (err) {
+            console.error(`❌ Firestore write failed for users/${userId}:`, err);
+            return res.status(500).json({ error: 'Failed to save customer ID' });
+        }
 
-    res.send({ customer: customer });
-}
+        // 4) Respond to client
+        return res.json({ customerId: customer.id });
+
+    } catch (err: any) {
+        console.error('❌ Error in createCustomer handler:', err);
+        return res.status(500).json({ error: err.message || 'Internal error' });
+    }
+};
 
 // Create subscription
 export const createSubscription = async (req: Request, res: Response) => {
