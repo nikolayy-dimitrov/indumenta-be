@@ -1,9 +1,14 @@
 import { Request, Response } from 'express';
 import { generateOutfitSuggestions } from '../services/openai.service';
+import {incrementOutfitGenerationCounter} from "../services/usage.service";
 
 export const generateOutfitController = async (req: Request, res: Response) => {
     try {
         const { wardrobe, stylePreferences } = req.body;
+
+        if (!req.user) {
+            return res.status(401).json({ error: 'Unauthorized: No user found' });
+        }
 
         // Validate input
         if (!wardrobe || !Array.isArray(wardrobe) || wardrobe.length === 0) {
@@ -12,6 +17,8 @@ export const generateOutfitController = async (req: Request, res: Response) => {
 
         // Call the OpenAI service to generate outfit suggestions
         const outfits = await generateOutfitSuggestions(wardrobe, stylePreferences || {});
+
+        await incrementOutfitGenerationCounter(req.user.uid);
 
         res.json(outfits);
     } catch (error) {

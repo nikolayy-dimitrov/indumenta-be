@@ -18,13 +18,21 @@ export const authenticateUser = async (
     res: Response,
     next: NextFunction
 ) => {
+    let token = null;
     const authHeader = req.headers.authorization;
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(401).json({ error: 'Unauthorized: No token provided' });
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.split('Bearer ')[1];
     }
 
-    const token = authHeader.split('Bearer ')[1];
+    // If no token in header, check query parameters
+    if (!token && req.query.auth) {
+        token = req.query.auth as string;
+    }
+
+    if (!token) {
+        return res.status(401).json({ error: 'Unauthorized: No token provided' });
+    }
 
     try {
         const decodedToken = await auth.verifyIdToken(token);

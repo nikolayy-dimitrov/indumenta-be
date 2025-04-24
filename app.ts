@@ -6,7 +6,6 @@ import imageRoutes from './src/routes/image.route';
 import outfitRoutes from './src/routes/outfit.route';
 import subscriptionRoute from "./src/routes/subscription.route";
 import webhookRoute from "./src/routes/webhook.route";
-import bodyParser from "body-parser";
 
 // Load environment variables
 dotenv.config();
@@ -31,7 +30,6 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/api/images', imageRoutes);
 app.use('/api', outfitRoutes);
 app.use('/api/subscribe', subscriptionRoute);
-// app.use('/api', webhookRoute);
 
 // Start server
 app.listen(port, () => {

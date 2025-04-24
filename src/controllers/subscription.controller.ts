@@ -16,7 +16,7 @@ export const pricesConfig = async (req: Request, res: Response) => {
 }
 
 export const createCustomer = async (req: Request, res: Response) => {
-    const { userId, email } = req.body as { userId: string; email: string };
+    const { userId, email } = req.body;
     console.log('💡 createCustomer called with:', { userId, email });
 
     if (!userId || !email) {
@@ -71,6 +71,9 @@ export const createSubscription = async (req: Request, res: Response) => {
             return res.status(400).json({ error: "Missing required fields." });
         }
 
+        // Retrieve product price details from Stripe by priceId
+        const price = await stripe.prices.retrieve(priceId);
+
         // Load Firestore doc by UID
         const userRef  = db.collection('users').doc(userId);
         const userSnap = await userRef.get();
@@ -117,6 +120,9 @@ export const createSubscription = async (req: Request, res: Response) => {
             currentPeriodEnd: invoice.period_end,
             trialStart: subscription.trial_start,
             trialEnd: subscription.trial_end,
+            planAmount: price.unit_amount,
+            planCurrency: price.currency,
+            planInterval: price.recurring?.interval
         }, { merge: true });
 
         // Return the subscription ID and the client secret from the PaymentIntent.
@@ -167,8 +173,7 @@ export const getSubscriptionStatus = async (req: Request, res: Response) => {
 // Cancel subscription
 export const cancelSubscription = async (req: Request, res: Response) => {
     try {
-        const { subscriptionId } = req.body;
-        const userId = req.user!.uid;
+        const { subscriptionId, userId } = req.body;
 
         if (!subscriptionId) {
             return res.status(400).json({ error: 'Subscription ID is required' });
@@ -181,7 +186,7 @@ export const cancelSubscription = async (req: Request, res: Response) => {
         }
 
         const userData = userDoc.data();
-        if (!userData?.subscription || userData.subscription.id !== subscriptionId) {
+        if (!userData?.subscriptionId || userData.subscriptionId !== subscriptionId) {
             return res.status(403).json({ error: 'Unauthorized access to this subscription' });
         }
 
@@ -192,7 +197,7 @@ export const cancelSubscription = async (req: Request, res: Response) => {
 
         // Update user record
         await db.collection('users').doc(userId).update({
-            'subscription.cancelAtPeriodEnd': true
+            'cancelAtPeriodEnd': true
         });
 
         return res.json({ success: true });
@@ -208,8 +213,7 @@ export const cancelSubscription = async (req: Request, res: Response) => {
 // Reactivate cancelled subscription
 export const reactivateSubscription = async (req: Request, res: Response) => {
     try {
-        const { subscriptionId } = req.body;
-        const userId = req.user!.uid;
+        const { subscriptionId, userId } = req.body;
 
         if (!subscriptionId) {
             return res.status(400).json({ error: 'Subscription ID is required' });
@@ -222,7 +226,7 @@ export const reactivateSubscription = async (req: Request, res: Response) => {
         }
 
         const userData = userDoc.data();
-        if (!userData?.subscription || userData.subscription.id !== subscriptionId) {
+        if (!userData?.subscriptionId || userData.subscriptionId !== subscriptionId) {
             return res.status(403).json({ error: 'Unauthorized access to this subscription' });
         }
 
@@ -233,7 +237,7 @@ export const reactivateSubscription = async (req: Request, res: Response) => {
 
         // Update user record
         await db.collection('users').doc(userId).update({
-            'subscription.cancelAtPeriodEnd': false
+            'cancelAtPeriodEnd': false
         });
 
         return res.json({ success: true });

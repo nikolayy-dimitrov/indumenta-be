@@ -19,15 +19,20 @@ export const webhookController = async (req: Request, res: Response) => {
     }
 
     if (
-        ['customer.subscription.created',
+        [
+            'customer.subscription.created',
             'customer.subscription.updated',
-            'customer.subscription.deleted'].includes(event.type)
+            'customer.subscription.deleted'
+        ].includes(event.type)
     ) {
         const sub = event.data.object as Stripe.Subscription;
         const customerId = sub.customer as string;
 
         const latestInvoiceId = sub.latest_invoice as string;
         const invoice = await stripe.invoices.retrieve(latestInvoiceId);
+
+        // TODO
+        // sub.next_pending_invoice_item_invoice;
 
         // Build update payload
         const updateData: Record<string, any> = {

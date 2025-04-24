@@ -16,7 +16,7 @@ router.post('/create-subscription', authenticateUser, createSubscription);
 router.post('/create-checkout-session', createSession);
 router.post('/create-setup-intent', authenticateUser, createSetupIntent);
 router.post('/user/cancel', authenticateUser, cancelSubscription);
-router.post('/user/reactivate', authenticateUser, reactivateSubscription);
+router.post('/user/resume', authenticateUser, reactivateSubscription);
 router.get('/user/status', authenticateUser, getSubscriptionStatus);
 router.get('/verify-payment', authenticateUser, verifyPayment);
 router.get('/session-status', sessionStatus);

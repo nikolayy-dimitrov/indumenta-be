@@ -1,8 +1,13 @@
 import { Request, Response } from 'express';
 import { analyzeImage } from '../services/image.service';
+import { incrementImageUploadCounter } from "../services/usage.service";
 
 export const analyzeImageController = async (req: Request, res: Response) => {
     try {
+        if (!req.user) {
+            return res.status(401).json({ error: 'Unauthorized: No user found' });
+        }
+
         if (!req.file) {
             return res.status(400).json({ error: 'No image file provided' });
         }
@@ -13,9 +18,11 @@ export const analyzeImageController = async (req: Request, res: Response) => {
         // Call the image analysis service
         const analysisResult = await analyzeImage(imageBytes);
 
+        await incrementImageUploadCounter(req.user.uid);
+
         res.json({
             success: true,
-            ...analysisResult
+            ...analysisResult,
         });
     } catch (error) {
         console.error('Error analyzing image:', error);
