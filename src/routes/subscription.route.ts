@@ -3,8 +3,8 @@ import {
     cancelSubscription, createCustomer,
     createSession, createSetupIntent,
     createSubscription,
-    getSubscriptionStatus, pricesConfig, reactivateSubscription,
-    sessionStatus, verifyPayment
+    getSubscriptionStatus, getUserUsageStatusController, pricesConfig, reactivateSubscription,
+    sessionStatus, verifyPayment, checkSubscriptions
 } from '../controllers/subscription.controller';
 import { authenticateUser } from "../middlewares/auth.middleware";
 
@@ -18,8 +18,10 @@ router.post('/create-setup-intent', authenticateUser, createSetupIntent);
 router.post('/user/cancel', authenticateUser, cancelSubscription);
 router.post('/user/resume', authenticateUser, reactivateSubscription);
 router.get('/user/status', authenticateUser, getSubscriptionStatus);
+router.get('/user/usage', authenticateUser, getUserUsageStatusController);
 router.get('/verify-payment', authenticateUser, verifyPayment);
 router.get('/session-status', sessionStatus);
 router.get('/subscription-status', getSubscriptionStatus);
+router.get('/debug/check-subscriptions', checkSubscriptions);
 
 export default router;

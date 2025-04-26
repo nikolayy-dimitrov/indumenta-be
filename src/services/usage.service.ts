@@ -1,5 +1,6 @@
 import { db } from '../config/firebase';
 import firebase from 'firebase-admin';
+import { getSubscriptionLimits } from "./subscription.service";
 
 interface UsageCounter {
     imageUploads: number;
@@ -109,19 +110,21 @@ export const incrementOutfitGenerationCounter = async (userId: string): Promise<
 /**
  * Get user's remaining uploads for the current week
  * @param userId User ID
- * @param maxUploads Maximum allowed uploads per week
+ * @param subscriptionTier User's Subscription Tier
  */
-export const getRemainingImageUploads = async (userId: string, maxUploads: number): Promise<number> => {
+export const getRemainingImageUploads = async (userId: string, subscriptionTier: string): Promise<number> => {
     const counter = await getUserUsageCounter(userId);
-    return Math.max(0, maxUploads - counter.imageUploads);
+    const limits = getSubscriptionLimits(subscriptionTier);
+    return Math.max(0, limits.maxImageUploads - counter.imageUploads);
 };
 
 /**
  * Get user's remaining outfit generations for the current week
  * @param userId User ID
- * @param maxGenerations Maximum allowed generations per week
+ * @param subscriptionTier User's Subscription Tier
  */
-export const getRemainingOutfitGenerations = async (userId: string, maxGenerations: number): Promise<number> => {
+export const getRemainingOutfitGenerations = async (userId: string, subscriptionTier: string): Promise<number> => {
     const counter = await getUserUsageCounter(userId);
-    return Math.max(0, maxGenerations - counter.outfitGenerations);
+    const limits = getSubscriptionLimits(subscriptionTier);
+    return Math.max(0, limits.maxOutfitGenerations - counter.outfitGenerations);
 };

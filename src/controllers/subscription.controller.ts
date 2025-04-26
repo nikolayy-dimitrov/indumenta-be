@@ -2,6 +2,9 @@ import { Request, Response } from 'express';
 import { stripe } from '../config/stripe';
 import { db } from "../config/firebase";
 import Stripe from "stripe";
+import { getSubscriptionLimits, SubscriptionTier } from "../services/subscription.service";
+import { getCurrentWeekStartTimestamp, getUserUsageCounter } from "../services/usage.service";
+import { checkExpiredSubscriptions } from "../services/subscriptionChecker.service";
 
 export const pricesConfig = async (req: Request, res: Response) => {
     const prices = await stripe.prices.list({
@@ -45,7 +48,10 @@ export const createCustomer = async (req: Request, res: Response) => {
 
         // 3) Persist to Firestore
         try {
-            await userRef.set({ stripeCustomerId: customer.id }, { merge: true });
+            await userRef.set({
+                stripeCustomerId: customer.id,
+                subscriptionTier: 'free'
+            }, { merge: true });
             console.log(`✅ Stored stripeCustomerId in users/${userId}`);
         } catch (err) {
             console.error(`❌ Firestore write failed for users/${userId}:`, err);
@@ -73,6 +79,12 @@ export const createSubscription = async (req: Request, res: Response) => {
 
         // Retrieve product price details from Stripe by priceId
         const price = await stripe.prices.retrieve(priceId);
+
+        // Set subscription tier based on priceId
+        const subscriptionTier =
+            priceId === process.env.STRIPE_PRICE_ID_BASIC ? 'basic' :
+                priceId === process.env.STRIPE_PRICE_ID_PREMIUM ? 'premium' :
+                    'free';
 
         // Load Firestore doc by UID
         const userRef  = db.collection('users').doc(userId);
@@ -115,6 +127,7 @@ export const createSubscription = async (req: Request, res: Response) => {
             stripeCustomerId: customerId,
             subscriptionId: subscription.id,
             subscriptionStatus: subscription.status,
+            subscriptionTier: subscriptionTier,
             priceId: subscription.items.data[0].price.id,
             currentPeriodStart: invoice.period_start,
             currentPeriodEnd: invoice.period_end,
@@ -343,4 +356,69 @@ export const sessionStatus = async (req: Request, res: Response) => {
         status: session.status,
         customer_email: session.customer_details?.email
     });
+};
+
+// Fetch the user's usage details from Firebase
+export const getUserUsageStatusController = async (req: Request, res: Response) => {
+    try {
+        if (!req.user || !req.user.uid) {
+            return res.status(401).json({ error: 'User authentication required' });
+        }
+
+        // Get user's subscription status from Firebase
+        const userRef = db.collection('users').doc(req.user.uid);
+        const userData = await userRef.get();
+        const userProfile = userData.data();
+        const subscriptionTier = userProfile?.subscriptionTier || SubscriptionTier.FREE;
+
+        // Get the limits based on subscription
+        const limits = getSubscriptionLimits(subscriptionTier);
+
+        // Get the user's current usage counter
+        const usageCounter = await getUserUsageCounter(req.user.uid);
+
+        // Calculate reset date
+        const weekStartTimestamp = getCurrentWeekStartTimestamp();
+        const resetDate = new Date(weekStartTimestamp + 7 * 24 * 60 * 60 * 1000);
+        const resetDateString = resetDate.toLocaleDateString('en-US', {
+            weekday: 'long',
+            month: 'short',
+            day: 'numeric'
+        });
+
+        res.json({
+            imageUploads: {
+                used: usageCounter.imageUploads,
+                remaining: Math.max(0, limits.maxImageUploads - usageCounter.imageUploads),
+                total: limits.maxImageUploads
+            },
+            outfitGenerations: {
+                used: usageCounter.outfitGenerations,
+                remaining: Math.max(0, limits.maxOutfitGenerations - usageCounter.outfitGenerations),
+                total: limits.maxOutfitGenerations
+            },
+            subscriptionTier: subscriptionTier,
+            resetsOn: resetDateString
+        });
+    } catch (error) {
+        console.error('Error getting user usage status:', error);
+        res.status(500).json({
+            error: 'Failed to get usage status',
+            details: error instanceof Error ? error.message : String(error)
+        });
+    }
+};
+
+export const checkSubscriptions = async (req: Request, res: Response) => {
+    try {
+        console.log('Manually triggering subscription check...');
+        const results = await checkExpiredSubscriptions();
+        res.json({
+            message: 'Check completed',
+            results
+        });
+    } catch (error: any) {
+        console.error('Error during manual check:', error);
+        res.status(500).json({ error: 'Check failed', details: error.message });
+    }
 };

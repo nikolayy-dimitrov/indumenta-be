@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import { analyzeImage } from '../services/image.service';
-import { incrementImageUploadCounter } from "../services/usage.service";
+import { getRemainingImageUploads, incrementImageUploadCounter } from "../services/usage.service";
+import { db } from "../config/firebase";
+import { SubscriptionTier } from "../services/subscription.service";
 
 export const analyzeImageController = async (req: Request, res: Response) => {
     try {
@@ -10,6 +12,35 @@ export const analyzeImageController = async (req: Request, res: Response) => {
 
         if (!req.file) {
             return res.status(400).json({ error: 'No image file provided' });
+        }
+
+        // Get user's subscription status from Firebase
+        const userRef = db.collection('users').doc(req.user.uid);
+        const userData = await userRef.get();
+        const userProfile = userData.data();
+        const subscriptionTier = userProfile?.subscriptionTier || SubscriptionTier.FREE;
+        const subscriptionStatus = userProfile?.subscriptionStatus || 'expired';
+
+        // Check remaining uploads based on subscription
+        const remainingUploads = await getRemainingImageUploads(req.user.uid, subscriptionTier);
+
+        // Check for BASIC and PREMIUM tiers, subscription must be active
+        if ((subscriptionTier === SubscriptionTier.BASIC || subscriptionTier === SubscriptionTier.PREMIUM) &&
+            subscriptionStatus !== 'active') {
+            return res.status(400).json({
+                error: 'Unauthorized',
+                message: 'The request made is unauthorized due to inactive subscription status.',
+                subscriptionStatus: subscriptionStatus
+            });
+        }
+
+        // Check if the user has remaining uploads
+        if (remainingUploads <= 0) {
+            return res.status(429).json({
+                error: 'Weekly upload limit reached',
+                message: 'You have reached your weekly image upload limit for your subscription tier.',
+                subscriptionTier: subscriptionTier
+            });
         }
 
         // Get the image buffer from the uploaded file
