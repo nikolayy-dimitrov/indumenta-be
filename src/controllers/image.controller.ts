@@ -4,25 +4,62 @@ import { getRemainingImageUploads, incrementImageUploadCounter } from "../servic
 import { db } from "../config/firebase";
 import { SubscriptionTier } from "../services/subscription.service";
 
-export const analyzeImageController = async (req: Request, res: Response) => {
+interface AuthenticatedRequest extends Request {
+    user?: {
+        uid: string;
+        email?: string;
+    };
+    file?: Express.Multer.File;
+}
+
+interface UserProfile {
+    subscriptionTier: SubscriptionTier;
+    subscriptionStatus: string;
+    emailVerified?: boolean;
+    lastLogin?: Date;
+    createdAt?: Date;
+}
+
+/**
+ * Controller for analyzing images with AWS Rekognition
+ * Handles user authentication, subscription checks, and rate limiting
+ */
+export const analyzeImageController = async (req: AuthenticatedRequest, res: Response) => {
     try {
         if (!req.user) {
-            return res.status(401).json({ error: 'Unauthorized: No user found' });
+            return res.status(404).json({ error: 'Unauthorized: No user found' });
         }
 
-        if (!req.file) {
+        if (!req.file || !req.file.buffer) {
             return res.status(400).json({ error: 'No image file provided' });
+        }
+
+        // Validate file size
+        const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+        if (req.file.size > MAX_FILE_SIZE) {
+            res.status(400).json({
+                error: 'Bad Request',
+                message: 'Image file size exceeds the 5MB limit.'
+            });
+            return;
         }
 
         // Get user's subscription status from Firebase
         const userRef = db.collection('users').doc(req.user.uid);
         const userData = await userRef.get();
-        const userProfile = userData.data();
+
+        if (!userData.exists) {
+            res.status(404).json({
+                error: 'Not Found',
+                message: 'User profile not found.'
+            });
+            return;
+        }
+
+        const userProfile = userData.data() as UserProfile;
         const subscriptionTier = userProfile?.subscriptionTier || SubscriptionTier.FREE;
         const subscriptionStatus = userProfile?.subscriptionStatus || 'expired';
 
-        // Check remaining uploads based on subscription
-        const remainingUploads = await getRemainingImageUploads(req.user.uid, subscriptionTier);
 
         // Check for BASIC and PREMIUM tiers, subscription must be active
         if ((subscriptionTier === SubscriptionTier.BASIC || subscriptionTier === SubscriptionTier.PREMIUM) &&
@@ -34,6 +71,8 @@ export const analyzeImageController = async (req: Request, res: Response) => {
             });
         }
 
+        // Check uploads based on subscription
+        const remainingUploads = await getRemainingImageUploads(req.user.uid, subscriptionTier);
         // Check if the user has remaining uploads
         if (remainingUploads <= 0) {
             return res.status(429).json({
@@ -50,6 +89,8 @@ export const analyzeImageController = async (req: Request, res: Response) => {
         const analysisResult = await analyzeImage(imageBytes);
 
         await incrementImageUploadCounter(req.user.uid);
+
+        // console.log(analysisResult);
 
         res.json({
             success: true,
