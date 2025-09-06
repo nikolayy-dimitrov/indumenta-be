@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { auth } from '../config/firebase';
 
-// Extend Request type to include user
 declare global {
     namespace Express {
         interface Request {

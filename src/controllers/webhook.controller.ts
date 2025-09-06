@@ -32,30 +32,25 @@ export const webhookController = async (req: Request, res: Response) => {
         const latestInvoiceId = sub.latest_invoice as string;
         const invoice = await stripe.invoices.retrieve(latestInvoiceId);
 
-        // Determine subscription tier based on price ID
         let subscriptionTier: SubscriptionTier | null = null;
         const priceId = sub.items.data[0]?.price.id;
 
-        // Map price IDs to subscription tiers
         if (process.env.STRIPE_PRICE_ID_PREMIUM === 'price_premium_monthly') {
             subscriptionTier = SubscriptionTier.PREMIUM;
         } else if (process.env.STRIPE_PRICE_ID_BASIC === 'price_basic_monthly') {
             subscriptionTier = SubscriptionTier.BASIC;
         }
 
-        // Build update payload
         const updateData: Record<string, any> = {
             subscriptionStatus: sub.status,
             subscriptionId: sub.id,
             priceId: priceId ?? null,
         };
 
-        // Set subscription tier if available
         if (subscriptionTier) {
             updateData.subscriptionTier = subscriptionTier;
         }
 
-        // If subscription is canceled or has expired, downgrade to FREE tier
         if (['canceled', 'unpaid', 'incomplete_expired'].includes(sub.status)) {
             updateData.subscriptionTier = SubscriptionTier.FREE;
             console.log(`Downgrading user with customer ID ${customerId} to FREE tier due to ${sub.status} status`);
@@ -70,7 +65,6 @@ export const webhookController = async (req: Request, res: Response) => {
         if (sub.canceled_at != null)
             updateData.canceledAt = sub.canceled_at;
 
-        // Update Firestore
         const usersRef = db.collection('users');
         const snapshot = await usersRef
             .where('stripeCustomerId', '==', customerId)

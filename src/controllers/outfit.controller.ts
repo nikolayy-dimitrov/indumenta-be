@@ -12,12 +12,10 @@ export const generateOutfitController = async (req: Request, res: Response) => {
             return res.status(401).json({ error: 'Unauthorized: No user found' });
         }
 
-        // Validate input
         if (!wardrobe || !Array.isArray(wardrobe) || wardrobe.length === 0) {
             return res.status(400).json({ error: 'Valid wardrobe items are required' });
         }
 
-        // Get user's subscription status from Firebase
         const userRef = db.collection('users').doc(req.user.uid);
         const userData = await userRef.get();
         const userProfile = userData.data();
@@ -26,7 +24,6 @@ export const generateOutfitController = async (req: Request, res: Response) => {
 
         const remainingGenerations = await getRemainingOutfitGenerations(req.user.uid, subscriptionTier);
 
-        // Check for BASIC and PREMIUM tiers, subscription must be active
         if ((subscriptionTier === SubscriptionTier.BASIC || subscriptionTier === SubscriptionTier.PREMIUM) &&
             subscriptionStatus !== 'active') {
             return res.status(400).json({
@@ -36,7 +33,6 @@ export const generateOutfitController = async (req: Request, res: Response) => {
             });
         }
 
-        // Check if the user has remaining outfit generations
         if (remainingGenerations <= 0) {
             return res.status(429).json({
                 error: 'Weekly generation limit reached',
@@ -45,7 +41,6 @@ export const generateOutfitController = async (req: Request, res: Response) => {
             });
         }
 
-        // Call the OpenAI service to generate outfit suggestions
         const outfits = await generateOutfitSuggestions(wardrobe, stylePreferences || {});
 
         await incrementOutfitGenerationCounter(req.user.uid);

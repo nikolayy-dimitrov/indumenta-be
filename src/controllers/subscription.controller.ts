@@ -30,70 +30,60 @@ export const createCustomer = async (req: Request, res: Response) => {
     const userRef = db.collection('users').doc(userId);
 
     try {
-        // 1) Read existing Firestore document
         const userSnap = await userRef.get();
         const existingId = userSnap.data()?.stripeCustomerId as string | undefined;
         if (existingId) {
-            console.log(`🔄 Existing stripeCustomerId found for ${userId}:`, existingId);
+            console.log(`Existing stripeCustomerId found for ${userId}:`, existingId);
             return res.json({ customerId: existingId });
         }
 
-        // 2) Create new Stripe customer
-        console.log(`➕ Creating new Stripe customer for ${email}`);
+        console.log(`Creating new Stripe customer for ${email}`);
         const customer = await stripe.customers.create({
             email,
             metadata: { firebaseUID: userId },
         });
-        console.log(`🆔 Created Stripe customer ID:`, customer.id);
+        console.log(`Created Stripe customer ID:`, customer.id);
 
-        // 3) Persist to Firestore
         try {
             await userRef.set({
                 stripeCustomerId: customer.id,
                 subscriptionTier: 'free'
             }, { merge: true });
-            console.log(`✅ Stored stripeCustomerId in users/${userId}`);
+            console.log(`Stored stripeCustomerId in users/${userId}`);
         } catch (err) {
-            console.error(`❌ Firestore write failed for users/${userId}:`, err);
+            console.error(`Firestore write failed for users/${userId}:`, err);
             return res.status(500).json({ error: 'Failed to save customer ID' });
         }
 
-        // 4) Respond to client
         return res.json({ customerId: customer.id });
 
     } catch (err: any) {
-        console.error('❌ Error in createCustomer handler:', err);
+        console.error('Error in createCustomer handler:', err);
         return res.status(500).json({ error: err.message || 'Internal error' });
     }
 };
 
-// Create subscription
 export const createSubscription = async (req: Request, res: Response) => {
     try {
-        // Extract the plan/price ID, uid, and email from the request body.
         const { priceId, userId, customerEmail, customerId } = req.body;
 
         if (!priceId || !userId || !customerEmail) {
             return res.status(400).json({ error: "Missing required fields." });
         }
 
-        // Retrieve product price details from Stripe by priceId
         const price = await stripe.prices.retrieve(priceId);
 
-        // Set subscription tier based on priceId
         const subscriptionTier =
             priceId === process.env.STRIPE_PRICE_ID_BASIC ? 'basic' :
                 priceId === process.env.STRIPE_PRICE_ID_PREMIUM ? 'premium' :
                     'free';
 
-        // Load Firestore doc by UID
         const userRef  = db.collection('users').doc(userId);
         const userSnap = await userRef.get();
         let stripeCustomerId = userSnap.exists
             ? userSnap.data()?.stripeCustomerId
             : undefined;
 
-        // Retrieve stripe customer
         let customer;
         if (stripeCustomerId) {
             customer = await stripe.customers.retrieve(stripeCustomerId) as Stripe.Customer;
@@ -102,14 +92,13 @@ export const createSubscription = async (req: Request, res: Response) => {
                 email: customerEmail,
                 metadata: { uid: userId },
             });
-            // Save ID and email in Firestore
+
             await userRef.set(
                 { stripeCustomerId: customer.id, email: customer.email },
                 { merge: true }
             );
         }
 
-        // Create the subscription.
         const subscription = await stripe.subscriptions.create({
             customer: customerId,
             items: [{ price: priceId }],
@@ -138,7 +127,6 @@ export const createSubscription = async (req: Request, res: Response) => {
             planInterval: price.recurring?.interval
         }, { merge: true });
 
-        // Return the subscription ID and the client secret from the PaymentIntent.
         res.send({
             subscriptionId: subscription.id,
             clientSecret: invoice.confirmation_secret.client_secret,
@@ -151,17 +139,14 @@ export const createSubscription = async (req: Request, res: Response) => {
     }
 };
 
-// Fetch subscription status from firebase collection
 export const getSubscriptionStatus = async (req: Request, res: Response) => {
     try {
         const userId = req.query.userId;
 
-        // Verify user is requesting their own data
         if (userId !== req.user!.uid) {
             return res.status(403).json({ error: 'Unauthorized access' });
         }
 
-        // Get user data from Firestore
         const userDoc = await db.collection('users').doc(userId).get();
 
         if (!userDoc.exists) {
@@ -170,7 +155,6 @@ export const getSubscriptionStatus = async (req: Request, res: Response) => {
 
         const userData = userDoc.data();
 
-        // Return subscription data if exists
         return res.json({
             subscription: userData?.subscription || null
         });
@@ -183,7 +167,6 @@ export const getSubscriptionStatus = async (req: Request, res: Response) => {
     }
 };
 
-// Cancel subscription
 export const cancelSubscription = async (req: Request, res: Response) => {
     try {
         const { subscriptionId, userId } = req.body;
@@ -192,7 +175,6 @@ export const cancelSubscription = async (req: Request, res: Response) => {
             return res.status(400).json({ error: 'Subscription ID is required' });
         }
 
-        // Verify user owns this subscription
         const userDoc = await db.collection('users').doc(userId).get();
         if (!userDoc.exists) {
             return res.status(404).json({ error: 'User not found' });
@@ -203,12 +185,10 @@ export const cancelSubscription = async (req: Request, res: Response) => {
             return res.status(403).json({ error: 'Unauthorized access to this subscription' });
         }
 
-        // Cancel at period end
         await stripe.subscriptions.update(subscriptionId, {
             cancel_at_period_end: true
         });
 
-        // Update user record
         await db.collection('users').doc(userId).update({
             'cancelAtPeriodEnd': true
         });
@@ -223,7 +203,6 @@ export const cancelSubscription = async (req: Request, res: Response) => {
     }
 };
 
-// Reactivate cancelled subscription
 export const reactivateSubscription = async (req: Request, res: Response) => {
     try {
         const { subscriptionId, userId } = req.body;
@@ -232,7 +211,6 @@ export const reactivateSubscription = async (req: Request, res: Response) => {
             return res.status(400).json({ error: 'Subscription ID is required' });
         }
 
-        // Verify user owns this subscription
         const userDoc = await db.collection('users').doc(userId).get();
         if (!userDoc.exists) {
             return res.status(404).json({ error: 'User not found' });
@@ -243,12 +221,10 @@ export const reactivateSubscription = async (req: Request, res: Response) => {
             return res.status(403).json({ error: 'Unauthorized access to this subscription' });
         }
 
-        // Remove the cancellation
         await stripe.subscriptions.update(subscriptionId, {
             cancel_at_period_end: false
         });
 
-        // Update user record
         await db.collection('users').doc(userId).update({
             'cancelAtPeriodEnd': false
         });
@@ -263,12 +239,10 @@ export const reactivateSubscription = async (req: Request, res: Response) => {
     }
 };
 
-// Update payment method
 export const createSetupIntent = async (req: Request, res: Response) => {
     try {
         const userId = req.user!.uid;
 
-        // Get user data to find Stripe customer ID
         const userDoc = await db.collection('users').doc(userId).get();
         if (!userDoc.exists) {
             return res.status(404).json({ error: 'User not found' });
@@ -281,7 +255,6 @@ export const createSetupIntent = async (req: Request, res: Response) => {
             return res.status(400).json({ error: 'No Stripe customer found for this user' });
         }
 
-        // Create setup intent for updating payment method
         const setupIntent = await stripe.setupIntents.create({
             customer: customerId,
             payment_method_types: ['card'],
@@ -299,7 +272,6 @@ export const createSetupIntent = async (req: Request, res: Response) => {
     }
 };
 
-// Verify payment status
 export const verifyPayment = async (req: Request, res: Response) => {
     try {
         const { payment_intent } = req.query;
@@ -308,10 +280,8 @@ export const verifyPayment = async (req: Request, res: Response) => {
             return res.status(400).json({ error: 'Payment intent ID is required' });
         }
 
-        // Retrieve the payment intent from Stripe
         const paymentIntent = await stripe.paymentIntents.retrieve(payment_intent);
 
-        // Get customer details if needed
         let customerEmail = '';
         if (paymentIntent.customer) {
             const customer = await stripe.customers.retrieve(paymentIntent.customer as string);
@@ -358,26 +328,21 @@ export const sessionStatus = async (req: Request, res: Response) => {
     });
 };
 
-// Fetch the user's usage details from Firebase
 export const getUserUsageStatusController = async (req: Request, res: Response) => {
     try {
         if (!req.user || !req.user.uid) {
             return res.status(401).json({ error: 'User authentication required' });
         }
 
-        // Get user's subscription status from Firebase
         const userRef = db.collection('users').doc(req.user.uid);
         const userData = await userRef.get();
         const userProfile = userData.data();
         const subscriptionTier = userProfile?.subscriptionTier || SubscriptionTier.FREE;
 
-        // Get the limits based on subscription
         const limits = getSubscriptionLimits(subscriptionTier);
 
-        // Get the user's current usage counter
         const usageCounter = await getUserUsageCounter(req.user.uid);
 
-        // Calculate reset date
         const weekStartTimestamp = getCurrentWeekStartTimestamp();
         const resetDate = new Date(weekStartTimestamp + 7 * 24 * 60 * 60 * 1000);
         const resetDateString = resetDate.toLocaleDateString('en-US', {

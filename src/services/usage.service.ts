@@ -5,7 +5,7 @@ import { getSubscriptionLimits } from "./subscription.service";
 interface UsageCounter {
     imageUploads: number;
     outfitGenerations: number;
-    weekStartTimestamp: number; // Unix timestamp of the start of the current week
+    weekStartTimestamp: number;
 }
 
 /**
@@ -13,10 +13,9 @@ interface UsageCounter {
  */
 export const getCurrentWeekStartTimestamp = (): number => {
     const now = new Date();
-    const day = now.getDay() || 7; // Convert Sunday (0) to 7 for easier calculation
-    const diff = now.getDate() - day + 1; // Adjust to Monday
+    const day = now.getDay() || 7;
+    const diff = now.getDate() - day + 1;
 
-    // Set to Monday 00:00:00
     const monday = new Date(now.setDate(diff));
     monday.setHours(0, 0, 0, 0);
 
@@ -45,7 +44,6 @@ export const getUserUsageCounter = async (userId: string): Promise<UsageCounter>
         const user = userData.data();
         const usageCounter = user?.usageCounter as UsageCounter;
 
-        // If user/counter doesn't exist, or it's a new week, create new/reset counter
         if (!userData.exists || !usageCounter || usageCounter.weekStartTimestamp < getCurrentWeekStartTimestamp()) {
             const newCounter = initializeUsageCounter();
             await userRef.set({ usageCounter: newCounter }, { merge: true });

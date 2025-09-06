@@ -1,15 +1,20 @@
 import { Request, Response } from 'express';
+
+import { GetSignedUrlConfig } from "@google-cloud/storage";
+
 import { analyzeImage } from '../services/image.service';
 import { getRemainingImageUploads, incrementImageUploadCounter } from "../services/usage.service";
-import { db } from "../config/firebase";
 import { SubscriptionTier } from "../services/subscription.service";
+import { db, storage } from "../config/firebase";
 
 interface AuthenticatedRequest extends Request {
     user?: {
         uid: string;
         email?: string;
     };
-    file?: Express.Multer.File;
+    doc?: {
+        id: string;
+    };
 }
 
 interface UserProfile {
@@ -21,30 +26,21 @@ interface UserProfile {
 }
 
 /**
- * Controller for analyzing images with AWS Rekognition
+ * Controller for analyzing images with OpenAI's GPT API
  * Handles user authentication, subscription checks, and rate limiting
  */
 export const analyzeImageController = async (req: AuthenticatedRequest, res: Response) => {
     try {
-        if (!req.user) {
+        if (!req.user || !req.user.uid) {
             return res.status(404).json({ error: 'Unauthorized: No user found' });
         }
 
-        if (!req.file || !req.file.buffer) {
-            return res.status(400).json({ error: 'No image file provided' });
+        const { imagePath, docId } = req.body;
+
+        if (!imagePath || !docId) {
+            return res.status(400).json({ error: 'No imagePath/docId provided in request body' });
         }
 
-        // Validate file size
-        const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
-        if (req.file.size > MAX_FILE_SIZE) {
-            res.status(400).json({
-                error: 'Bad Request',
-                message: 'Image file size exceeds the 5MB limit.'
-            });
-            return;
-        }
-
-        // Get user's subscription status from Firebase
         const userRef = db.collection('users').doc(req.user.uid);
         const userData = await userRef.get();
 
@@ -60,8 +56,6 @@ export const analyzeImageController = async (req: AuthenticatedRequest, res: Res
         const subscriptionTier = userProfile?.subscriptionTier || SubscriptionTier.FREE;
         const subscriptionStatus = userProfile?.subscriptionStatus || 'expired';
 
-
-        // Check for BASIC and PREMIUM tiers, subscription must be active
         if ((subscriptionTier === SubscriptionTier.BASIC || subscriptionTier === SubscriptionTier.PREMIUM) &&
             subscriptionStatus !== 'active') {
             return res.status(400).json({
@@ -71,9 +65,8 @@ export const analyzeImageController = async (req: AuthenticatedRequest, res: Res
             });
         }
 
-        // Check uploads based on subscription
         const remainingUploads = await getRemainingImageUploads(req.user.uid, subscriptionTier);
-        // Check if the user has remaining uploads
+
         if (remainingUploads <= 0) {
             return res.status(429).json({
                 error: 'Weekly upload limit reached',
@@ -82,35 +75,79 @@ export const analyzeImageController = async (req: AuthenticatedRequest, res: Res
             });
         }
 
-        // Get the image buffer from the uploaded file
-        const imageBytes = req.file.buffer;
+        const bucket = storage.bucket();
+        const file = bucket.file(imagePath);
+        const [exists] = await file.exists();
 
-        // Call the image analysis service
-        const analysisResult = await analyzeImage(imageBytes);
+        if (!exists) {
+            return res.status(404).json({
+                error: 'File not found',
+                message: 'The specified image file does not exist in storage.',
+                imagePath
+            });
+        }
+
+        const urlOptions: GetSignedUrlConfig = {
+            version: "v4",
+            action: "read",
+            expires: Date.now() + 1000 * 60 * 3,
+        }
+
+        const [signedUrl] = await file.getSignedUrl(urlOptions);
+
+        try {
+            const response = await fetch(signedUrl, { method: 'HEAD' });
+            if (!response.ok) {
+                return res.status(500).json({
+                    error: 'Image URL not accessible',
+                    message: 'Generated signed URL is not accessible',
+                    statusCode: response.status
+                });
+            }
+        } catch (urlError) {
+            return res.status(500).json({
+                error: 'URL accessibility test failed',
+                message: 'Could not verify URL accessibility'
+            });
+        }
+
+        const analysisResult = await analyzeImage(signedUrl);
+
+        const docRef = db.collection("clothes").doc(docId);
+        await docRef.update({
+            analysis: analysisResult,
+            status: "complete"
+        })
 
         await incrementImageUploadCounter(req.user.uid);
-
-        // console.log(analysisResult);
 
         res.json({
             success: true,
             ...analysisResult,
         });
-    } catch (error) {
-        console.error('Error analyzing image:', error);
-        res.status(500).json({
-            error: 'Error analyzing image',
-            details: error instanceof Error ? error.message : String(error)
-        });
-    }
-};
 
-// Redirect handler for the rekognition-analyze endpoint
-export const rekognitionAnalyzeRedirect = async (req: Request, res: Response) => {
-    try {
-        res.redirect(307, '/api/images/analyze');
     } catch (error) {
-        console.error('Error in rekognition redirect:', error);
-        res.status(500).json({ error: 'Internal server error' });
+
+        if (error instanceof Error) {
+            if (error.message.includes('Bucket name not specified')) {
+                return res.status(500).json({
+                    error: 'Storage configuration error',
+                    message: 'Firebase Storage bucket not properly configured'
+                });
+            }
+
+            if (error.message.includes('invalid_image_url')) {
+                return res.status(400).json({
+                    error: 'Invalid image URL',
+                    message: 'OpenAI could not access the image URL. Please try again.'
+                });
+            }
+        }
+
+        res.status(500).json({
+            error: 'Internal server error',
+            message: 'An unexpected error occurred while analyzing the image',
+            details: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : String(error)) : undefined
+        });
     }
 };
