@@ -1,4 +1,7 @@
-import { openai } from "../config/openai";
+import { Type } from "@google/genai";
+
+import { genAI } from "../config/gemini";
+import { CacheType, PROMPT, SYSTEM_INSTRUCTIONS } from "../constants/prompts";
 
 export interface ClothingAnalysisResult {
     category: string;
@@ -10,47 +13,80 @@ export interface ClothingAnalysisResult {
 }
 
 export const analyzeImage = async (signedUrl: string): Promise<ClothingAnalysisResult> => {
-    const prompt = `
-        Analyze this clothing image and classify it. Return only a valid JSON object with the following fields:
-
-        category: general type (e.g., "Shirt", "Pants")
-        subCategory (optional): specific type (e.g., "T-shirt", "Joggers")
-        color: primary color in 6-digit hex code (e.g., "#000000")
-        secondaryColor (optional): secondary color in hex (omit if not present)
-        occasion: array of suitable occasions (e.g., ["Casual", "Formal"])
-        season: array of best-fit seasons (e.g., ["Summer", "Fall"])
-
-        Do not return any explanation, markdown, or text outside the JSON. Only include valid fields.
-    `;
-
-    const response = await openai.chat.completions.create({
-        model: 'gpt-4o',
-        messages: [
-            { role: 'system', content: 'You are a clothing image analyzer.' },
-            {
-                role: 'user',
-                content: [
-                    { type: 'text', text: prompt },
-                    { type: 'image_url', image_url: { url: signedUrl } }
-                ]
-            }
-        ],
-        max_tokens: 200,
-        temperature: 0.4,
-    });
-
-    const responseText = response.choices[0]?.message?.content;
-    if (!responseText) {
-        throw new Error('OpenAI response is empty.');
-    }
-
     try {
-        return JSON.parse(responseText);
-    } catch {
-        const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/);
-        if (!jsonMatch) {
-            throw new Error('Failed to extract JSON from OpenAI response.');
+        const imageResponse = await fetch(signedUrl);
+        if (!imageResponse.ok) {
+            throw new Error(`Failed to fetch image: ${imageResponse.statusText}`);
         }
-        return JSON.parse(jsonMatch[1]);
+
+        const imageBuffer = await imageResponse.arrayBuffer();
+        const imageBase64 = Buffer.from(imageBuffer).toString('base64');
+
+        const mimeType = imageResponse.headers.get('content-type') || 'image/png';
+
+        const response = await genAI.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: [
+                {
+                    role: "user",
+                    parts: [
+                        {
+                            inlineData: {
+                                data: imageBase64,
+                                mimeType: mimeType
+                            }
+                        },
+                        {
+                            text: PROMPT[CacheType.IMAGE_ANALYSIS]
+                        }
+                    ]
+                }
+            ],
+            config: {
+                systemInstruction: SYSTEM_INSTRUCTIONS[CacheType.IMAGE_ANALYSIS],
+                responseMimeType: 'application/json',
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        category: { type: Type.STRING },
+                        subCategory: { type: Type.STRING },
+                        season: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        occasion: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        color: { type: Type.STRING },
+                        secondaryColor: { type: Type.STRING },
+                    },
+                    required: [ "category", "season", "occasion", "color" ]
+                }
+            }
+        });
+
+        // console.log('totalTokenCount: ' + response.usageMetadata?.totalTokenCount);
+
+        const responseText = response.text;
+        if (!responseText) {
+            throw new Error('Gemini response is empty.');
+        }
+
+        return JSON.parse(responseText);
+    } catch (error: any) {
+        console.error('Gemini API error:', error);
+
+        if (error.message?.includes('quota') || error.message?.includes('RESOURCE_EXHAUSTED')) {
+            throw new Error('Gemini API quota exceeded. Please try again later.');
+        }
+
+        if (error.message?.includes('SAFETY') || error.message?.includes('blocked')) {
+            throw new Error('Image was blocked by Gemini safety filters.');
+        }
+
+        if (error.message?.includes('INVALID_ARGUMENT')) {
+            throw new Error('Invalid image format or data.');
+        }
+
+        if (error.message?.includes('API key not valid')) {
+            throw new Error('Invalid Gemini API key.');
+        }
+
+        throw new Error(`Image analysis failed: ${error.message}`);
     }
 }

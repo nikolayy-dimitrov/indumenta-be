@@ -5,7 +5,7 @@ dotenv.config();
 export const PORT = process.env.PORT || 3001;
 export const FRONTEND_URL = process.env.FRONTEND_URL;
 export const APP_URL = process.env.APP_URL;
-export const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+export const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 export const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 export const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
 export const AWS_REGION = process.env.AWS_REGION || 'us-east-1';

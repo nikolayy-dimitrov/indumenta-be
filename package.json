@@ -13,18 +13,15 @@
   "license": "ISC",
   "description": "AI-Powered Digital Wardrobe Organizer Server",
   "dependencies": {
-    "@aws-sdk/client-rekognition": "^3.777.0",
+    "@google/genai": "^1.31.0",
     "@imgly/background-removal-node": "^1.4.5",
     "@types/stripe": "^8.0.416",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
-    "dragoneye-node": "^1.0.2",
     "express": "^4.21.1",
     "firebase-admin": "^13.4.0",
     "multer": "^1.4.5-lts.1",
     "node-cron": "^3.0.3",
-    "node-fetch": "^3.3.2",
-    "openai": "^4.91.1",
     "stripe": "^18.0.0"
   },
   "devDependencies": {

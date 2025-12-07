@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { generateOutfitSuggestions } from '../services/openai.service';
+import { generateOutfitSuggestions } from '../services/outfit.service';
 import { getRemainingOutfitGenerations, incrementOutfitGenerationCounter } from "../services/usage.service";
 import { SubscriptionTier } from "../services/subscription.service";
 import { db } from "../config/firebase";

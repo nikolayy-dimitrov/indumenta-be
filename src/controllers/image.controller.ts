@@ -26,7 +26,7 @@ interface UserProfile {
 }
 
 /**
- * Controller for analyzing images with OpenAI's GPT API
+ * Controller for analyzing images with Google's Gemini API
  * Handles user authentication, subscription checks, and rate limiting
  */
 export const analyzeImageController = async (req: AuthenticatedRequest, res: Response) => {
@@ -94,6 +94,7 @@ export const analyzeImageController = async (req: AuthenticatedRequest, res: Res
         }
 
         const [signedUrl] = await file.getSignedUrl(urlOptions);
+        // console.log('signedUrl: ' + signedUrl);
 
         try {
             const response = await fetch(signedUrl, { method: 'HEAD' });
@@ -127,7 +128,6 @@ export const analyzeImageController = async (req: AuthenticatedRequest, res: Res
         });
 
     } catch (error) {
-
         if (error instanceof Error) {
             if (error.message.includes('Bucket name not specified')) {
                 return res.status(500).json({
@@ -139,7 +139,7 @@ export const analyzeImageController = async (req: AuthenticatedRequest, res: Res
             if (error.message.includes('invalid_image_url')) {
                 return res.status(400).json({
                     error: 'Invalid image URL',
-                    message: 'OpenAI could not access the image URL. Please try again.'
+                    message: 'Gemini could not access the image URL. Please try again.'
                 });
             }
         }
