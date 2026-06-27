@@ -31,7 +31,7 @@ export const createCustomer = async (req: Request, res: Response) => {
 
     try {
         const userSnap = await userRef.get();
-        const existingId = userSnap.data()?.stripeCustomerId as string | undefined;
+        const existingId = userSnap.data()?.['stripeCustomerId'] as string | undefined;
         if (existingId) {
             console.log(`Existing stripeCustomerId found for ${userId}:`, existingId);
             return res.json({ customerId: existingId });
@@ -81,7 +81,7 @@ export const createSubscription = async (req: Request, res: Response) => {
         const userRef  = db.collection('users').doc(userId);
         const userSnap = await userRef.get();
         let stripeCustomerId = userSnap.exists
-            ? userSnap.data()?.stripeCustomerId
+            ? userSnap.data()?.['stripeCustomerId']
             : undefined;
 
         let customer;
@@ -117,7 +117,7 @@ export const createSubscription = async (req: Request, res: Response) => {
             subscriptionId: subscription.id,
             subscriptionStatus: subscription.status,
             subscriptionTier: subscriptionTier,
-            priceId: subscription.items.data[0].price.id,
+            priceId: subscription.items.data[0]!.price.id,
             currentPeriodStart: invoice.period_start,
             currentPeriodEnd: invoice.period_end,
             trialStart: subscription.trial_start,
@@ -141,7 +141,7 @@ export const createSubscription = async (req: Request, res: Response) => {
 
 export const getSubscriptionStatus = async (req: Request, res: Response) => {
     try {
-        const userId = req.query.userId;
+        const userId = req.query['userId'];
 
         if (userId !== req.user!.uid) {
             return res.status(403).json({ error: 'Unauthorized access' });
@@ -156,7 +156,7 @@ export const getSubscriptionStatus = async (req: Request, res: Response) => {
         const userData = userDoc.data();
 
         return res.json({
-            subscription: userData?.subscription || null
+            subscription: userData?.['subscription'] || null
         });
     } catch (error) {
         console.error('Error fetching subscription:', error);
@@ -181,7 +181,7 @@ export const cancelSubscription = async (req: Request, res: Response) => {
         }
 
         const userData = userDoc.data();
-        if (!userData?.subscriptionId || userData.subscriptionId !== subscriptionId) {
+        if (!userData?.['subscriptionId'] || userData['subscriptionId'] !== subscriptionId) {
             return res.status(403).json({ error: 'Unauthorized access to this subscription' });
         }
 
@@ -217,7 +217,7 @@ export const reactivateSubscription = async (req: Request, res: Response) => {
         }
 
         const userData = userDoc.data();
-        if (!userData?.subscriptionId || userData.subscriptionId !== subscriptionId) {
+        if (!userData?.['subscriptionId'] || userData['subscriptionId'] !== subscriptionId) {
             return res.status(403).json({ error: 'Unauthorized access to this subscription' });
         }
 
@@ -249,7 +249,7 @@ export const createSetupIntent = async (req: Request, res: Response) => {
         }
 
         const userData = userDoc.data();
-        const customerId = userData?.stripeCustomerId;
+        const customerId = userData?.['stripeCustomerId'];
 
         if (!customerId) {
             return res.status(400).json({ error: 'No Stripe customer found for this user' });
@@ -307,8 +307,7 @@ export const verifyPayment = async (req: Request, res: Response) => {
 
 export const createSession = async (req: Request, res: Response) => {
     const session = await stripe.checkout.sessions.create({
-        ui_mode: "custom",
-        customer_email: req.body.customerEmail,
+                customer_email: req.body.customerEmail,
         line_items: [{
             price: req.body.priceId,
             quantity: 1
@@ -321,7 +320,7 @@ export const createSession = async (req: Request, res: Response) => {
 };
 
 export const sessionStatus = async (req: Request, res: Response) => {
-    const session = await stripe.checkout.sessions.retrieve(<string>req.query.session_id);
+    const session = await stripe.checkout.sessions.retrieve(<string>req.query['session_id']);
     res.send({
         status: session.status,
         customer_email: session.customer_details?.email
@@ -337,7 +336,7 @@ export const getUserUsageStatusController = async (req: Request, res: Response) 
         const userRef = db.collection('users').doc(req.user.uid);
         const userData = await userRef.get();
         const userProfile = userData.data();
-        const subscriptionTier = userProfile?.subscriptionTier || SubscriptionTier.FREE;
+        const subscriptionTier = userProfile?.['subscriptionTier'] || SubscriptionTier.FREE;
 
         const limits = getSubscriptionLimits(subscriptionTier);
 

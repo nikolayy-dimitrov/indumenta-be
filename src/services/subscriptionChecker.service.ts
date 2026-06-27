@@ -26,12 +26,12 @@ export const checkExpiredSubscriptions = async (): Promise<{
         // Process each user with an expired subscription
         const batch = db.batch();
 
-        snapshot.forEach(doc => {
+        snapshot.forEach((doc: any) => {
             const userData = doc.data();
 
             // Check if the subscription is set to auto-renew
-            if (userData.cancelAtPeriodEnd === true ||
-                userData.subscriptionStatus !== 'active') {
+            if (userData['cancelAtPeriodEnd'] === true ||
+                userData['subscriptionStatus'] !== 'active') {
 
                 batch.update(doc.ref, {
                     subscriptionTier: SubscriptionTier.FREE,
@@ -40,16 +40,16 @@ export const checkExpiredSubscriptions = async (): Promise<{
 
                 results.downgraded.push({
                     userId: doc.id,
-                    previousTier: userData.subscriptionTier
+                    previousTier: userData['subscriptionTier']
                 });
 
-                console.log(`Scheduled downgrade for user ${doc.id} from ${userData.subscriptionTier} to FREE`);
+                console.log(`Scheduled downgrade for user ${doc.id} from ${userData['subscriptionTier']} to FREE`);
             } else {
                 results.needsCheck.push({
                     userId: doc.id,
-                    tier: userData.subscriptionTier,
-                    status: userData.subscriptionStatus,
-                    periodEnd: userData.currentPeriodEnd
+                    tier: userData['subscriptionTier'],
+                    status: userData['subscriptionStatus'],
+                    periodEnd: userData['currentPeriodEnd']
                 });
 
                 console.log(`User ${doc.id} has passed period end but may still have an active subscription. Manual check required.`);

@@ -19,8 +19,8 @@ export const generateOutfitController = async (req: Request, res: Response) => {
         const userRef = db.collection('users').doc(req.user.uid);
         const userData = await userRef.get();
         const userProfile = userData.data();
-        const subscriptionTier = userProfile?.subscriptionTier || SubscriptionTier.FREE;
-        const subscriptionStatus = userProfile?.subscriptionStatus || 'expired';
+        const subscriptionTier = userProfile?.['subscriptionTier'] || SubscriptionTier.FREE;
+        const subscriptionStatus = userProfile?.['subscriptionStatus'] || 'expired';
 
         const remainingGenerations = await getRemainingOutfitGenerations(req.user.uid, subscriptionTier);
 

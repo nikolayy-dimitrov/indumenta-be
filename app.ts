@@ -12,9 +12,9 @@ import { initializeScheduledTasks } from "./src/utils/scheduler";
 dotenv.config();
 
 const app: Application = express();
-const port = process.env.PORT || 3001;
-const frontendUrl = process.env.FRONTEND_URL;
-const appUrl = process.env.APP_URL;
+const port = process.env['PORT'] || 3001;
+const frontendUrl = process.env['FRONTEND_URL'];
+const appUrl = process.env['APP_URL'];
 
 app.use('/api/webhook', express.raw({ type: 'application/json' }), webhookRoute);
 

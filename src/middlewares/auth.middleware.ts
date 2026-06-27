@@ -25,8 +25,8 @@ export const authenticateUser = async (
     }
 
     // If no token in header, check query parameters
-    if (!token && req.query.auth) {
-        token = req.query.auth as string;
+    if (!token && req.query['auth']) {
+        token = req.query['auth'] as string;
     }
 
     if (!token) {
@@ -35,10 +35,7 @@ export const authenticateUser = async (
 
     try {
         const decodedToken = await auth.verifyIdToken(token);
-        req.user = {
-            uid: decodedToken.uid,
-            email: decodedToken.email
-        };
+        req.user = { uid: decodedToken.uid }; if (decodedToken.email) req.user.email = decodedToken.email;
         next();
     } catch (error) {
         console.error('Authentication error:', error);

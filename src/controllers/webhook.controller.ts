@@ -48,22 +48,22 @@ export const webhookController = async (req: Request, res: Response) => {
         };
 
         if (subscriptionTier) {
-            updateData.subscriptionTier = subscriptionTier;
+            updateData['subscriptionTier'] = subscriptionTier;
         }
 
         if (['canceled', 'unpaid', 'incomplete_expired'].includes(sub.status)) {
-            updateData.subscriptionTier = SubscriptionTier.FREE;
+            updateData['subscriptionTier'] = SubscriptionTier.FREE;
             console.log(`Downgrading user with customer ID ${customerId} to FREE tier due to ${sub.status} status`);
         }
 
         if (invoice.period_start != null)
-            updateData.currentPeriodStart = invoice.period_start;
+            updateData['currentPeriodStart'] = invoice.period_start;
         if (invoice.period_end != null)
-            updateData.currentPeriodEnd = invoice.period_end;
+            updateData['currentPeriodEnd'] = invoice.period_end;
         if (sub.cancel_at_period_end != null)
-            updateData.cancelAtPeriodEnd = sub.cancel_at_period_end;
+            updateData['cancelAtPeriodEnd'] = sub.cancel_at_period_end;
         if (sub.canceled_at != null)
-            updateData.canceledAt = sub.canceled_at;
+            updateData['canceledAt'] = sub.canceled_at;
 
         const usersRef = db.collection('users');
         const snapshot = await usersRef
@@ -72,7 +72,7 @@ export const webhookController = async (req: Request, res: Response) => {
 
         if (!snapshot.empty) {
             await Promise.all(
-                snapshot.docs.map(doc => doc.ref.update(updateData))
+                snapshot.docs.map((doc: any) => doc.ref.update(updateData))
             );
             console.log(`Updated subscription for ${customerId}`);
         } else {

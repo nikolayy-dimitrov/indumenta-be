@@ -1,5 +1,5 @@
 import { db } from '../config/firebase';
-import firebase from 'firebase-admin';
+import { FieldValue } from 'firebase-admin/firestore';
 import { getSubscriptionLimits } from "./subscription.service";
 
 interface UsageCounter {
@@ -42,7 +42,7 @@ export const getUserUsageCounter = async (userId: string): Promise<UsageCounter>
         const userData = await userRef.get();
 
         const user = userData.data();
-        const usageCounter = user?.usageCounter as UsageCounter;
+        const usageCounter = user?.['usageCounter'] as UsageCounter;
 
         if (!userData.exists || !usageCounter || usageCounter.weekStartTimestamp < getCurrentWeekStartTimestamp()) {
             const newCounter = initializeUsageCounter();
@@ -71,7 +71,7 @@ export const incrementImageUploadCounter = async (userId: string): Promise<Usage
         };
 
         await userRef.update({
-            'usageCounter.imageUploads': firebase.firestore.FieldValue.increment(1)
+            'usageCounter.imageUploads': FieldValue.increment(1)
         });
 
         return counter;
@@ -95,7 +95,7 @@ export const incrementOutfitGenerationCounter = async (userId: string): Promise<
         };
 
         await userRef.update({
-            'usageCounter.outfitGenerations': firebase.firestore.FieldValue.increment(1)
+            'usageCounter.outfitGenerations': FieldValue.increment(1)
         });
 
         return counter;

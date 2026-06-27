@@ -147,7 +147,7 @@ export const analyzeImageController = async (req: AuthenticatedRequest, res: Res
         res.status(500).json({
             error: 'Internal server error',
             message: 'An unexpected error occurred while analyzing the image',
-            details: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : String(error)) : undefined
+            details: process.env['NODE_ENV'] === 'development' ? (error instanceof Error ? error.message : String(error)) : undefined
         });
     }
 };
