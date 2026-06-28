@@ -19,7 +19,9 @@ const appUrl = process.env['APP_URL'];
 app.use('/api/webhook', express.raw({ type: 'application/json' }), webhookRoute);
 
 app.use(cors({
-    origin: frontendUrl || appUrl,
+    origin: [frontendUrl, appUrl]
+        .filter((url): url is string => Boolean(url))
+        .map(url => url.replace(/\/$/, '')),
     credentials: true,
 }));
 
