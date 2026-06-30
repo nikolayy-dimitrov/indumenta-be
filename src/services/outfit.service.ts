@@ -16,6 +16,7 @@ export interface WardrobeItem {
 export interface StylePreferences {
     color?: string;
     occasion?: string;
+    season?: string;
 }
 
 interface OutfitPieces {
@@ -37,6 +38,7 @@ export const generateOutfitSuggestions = async (wardrobe: WardrobeItem[], styleP
         ### User Preferences:
         ${stylePreferences.color ? `- **Color Preference:** ${stylePreferences.color}` : ''}
         ${stylePreferences.occasion ? `- **Occasion:** ${stylePreferences.occasion}` : ''}
+        ${stylePreferences.season ? `**Season** ${stylePreferences.season}` : ''}
         
         ### Wardrobe Items:
         ${wardrobe.map((item) =>
